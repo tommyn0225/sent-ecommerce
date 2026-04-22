@@ -11,14 +11,26 @@ export default function Home() {
     e.preventDefault();
     setLoading(true);
 
-    // TODO: call our API route to send OTP via Sent
-    console.log("Sending OTP to:", phone);
+    try {
+      const res = await fetch("/api/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone }),
+      });
 
-    // Delay
-    setTimeout(() => {
-      setLoading(false);
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || "Something went wrong");
+        return;
+      }
+
       setSubmitted(true);
-    }, 1000);
+    } catch (error) {
+      console.error(error);
+      alert("Failed to send code. Check the console for details.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (submitted) {
