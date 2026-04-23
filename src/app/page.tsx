@@ -14,11 +14,20 @@ export default function Home() {
     setLoading(true);
     setError("");
 
+    // Strip everything except digits and leading +
+    const cleaned = phone.replace(/[^\d+]/g, "");
+
+    if (cleaned.length < 11 || cleaned.length > 15 || !cleaned.startsWith("+")) {
+      setError("Enter a valid phone number with country code (e.g. +14081231234)");
+      setLoading(false);
+      return;
+    }
+
     try {
       const res = await fetch("/api/send-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone }),
+        body: JSON.stringify({ phone: cleaned }),
       });
 
       const data = await res.json();
