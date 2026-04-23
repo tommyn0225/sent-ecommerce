@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
 import twilio from "twilio";
+import bcrypt from "bcryptjs";
+import { supabase } from "@/lib/supabase";
 
-const client = twilio(
+const twilioClient = twilio(
   process.env.TWILIO_ACCOUNT_SID,
   process.env.TWILIO_AUTH_TOKEN
 );
-
-// Store OTP codes in memory
-const otpStore = new Map<string, { code: string; expiresAt: number }>();
 
 export async function POST(request: Request) {
   const { phone } = await request.json();
@@ -22,19 +21,37 @@ export async function POST(request: Request) {
   const code = Math.floor(100000 + Math.random() * 900000).toString();
 
   try {
-    await client.messages.create({
+    // Send SMS via Twilio
+    await twilioClient.messages.create({
       body: `${code} is your verification code.`,
       from: process.env.TWILIO_PHONE_NUMBER,
       to: phone,
     });
 
-    otpStore.set(phone, {
-      code,
-      expiresAt: Date.now() + 5 * 60 * 1000,
+    // Hash the code before storing
+    const codeHash = await bcrypt.hash(code, 10);
+
+    // Delete any existing codes for this phone number
+    await supabase.from("otp_codes").delete().eq("phone", phone);
+
+    // Store the hashed code with a 5-minute expiration
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+
+    const { error: dbError } = await supabase.from("otp_codes").insert({
+      phone,
+      code_hash: codeHash,
+      expires_at: expiresAt,
     });
 
-    console.log(`OTP sent to ${phone}`);
+    if (dbError) {
+      console.error("Database error:", dbError);
+      return NextResponse.json(
+        { error: "Failed to store verification code" },
+        { status: 500 }
+      );
+    }
 
+    console.log(`OTP sent to ${phone}`);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Failed to send OTP:", error);
@@ -44,5 +61,3 @@ export async function POST(request: Request) {
     );
   }
 }
-
-export { otpStore };

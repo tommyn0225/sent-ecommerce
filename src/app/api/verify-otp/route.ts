@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { otpStore } from "../send-otp/route";
+import bcrypt from "bcryptjs";
+import { supabase } from "@/lib/supabase";
 
 export async function POST(request: Request) {
   const { phone, code } = await request.json();
@@ -11,32 +12,41 @@ export async function POST(request: Request) {
     );
   }
 
-  const stored = otpStore.get(phone);
+  // Look up the stored code for this phone number
+  const { data, error: dbError } = await supabase
+    .from("otp_codes")
+    .select("*")
+    .eq("phone", phone)
+    .single();
 
-  if (!stored) {
+  if (dbError || !data) {
     return NextResponse.json(
       { error: "No code found. Request a new one." },
       { status: 400 }
     );
   }
 
-  if (Date.now() > stored.expiresAt) {
-    otpStore.delete(phone);
+  // Check if the code has expired
+  if (new Date() > new Date(data.expires_at)) {
+    await supabase.from("otp_codes").delete().eq("phone", phone);
     return NextResponse.json(
       { error: "Code expired. Request a new one." },
       { status: 400 }
     );
   }
 
-  if (stored.code !== code) {
+  // Compare the submitted code against the hash
+  const isValid = await bcrypt.compare(code, data.code_hash);
+
+  if (!isValid) {
     return NextResponse.json(
       { error: "Invalid code. Try again." },
       { status: 400 }
     );
   }
 
-  // Code is correct — clean up
-  otpStore.delete(phone);
+  // Code is correct — delete it so it can't be reused
+  await supabase.from("otp_codes").delete().eq("phone", phone);
 
   return NextResponse.json({ success: true, verified: true });
 }
