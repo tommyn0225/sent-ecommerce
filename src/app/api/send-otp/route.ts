@@ -18,6 +18,30 @@ export async function POST(request: Request) {
     );
   }
 
+  // Rate limiting: max 3 OTP requests per phone per hour
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+
+  const { count, error: countError } = await supabase
+    .from("rate_limits")
+    .select("*", { count: "exact", head: true })
+    .eq("phone", phone)
+    .gte("attempted_at", oneHourAgo);
+
+  if (countError) {
+    console.error("Rate limit check failed:", countError);
+    return NextResponse.json(
+      { error: "Something went wrong. Try again." },
+      { status: 500 }
+    );
+  }
+
+  if ((count ?? 0) >= 3) {
+    return NextResponse.json(
+      { error: "Too many attempts. Please try again in an hour." },
+      { status: 429 }
+    );
+  }
+
   const code = Math.floor(100000 + Math.random() * 900000).toString();
 
   try {
@@ -58,6 +82,9 @@ export async function POST(request: Request) {
         { status: 500 }
       );
     }
+
+    // Log the attempt for rate limiting
+    await supabase.from("rate_limits").insert({ phone });
 
     console.log(`OTP sent to ${phone}`);
     return NextResponse.json({ success: true });
