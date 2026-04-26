@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 export default function Home() {
   const [phone, setPhone] = useState("");
@@ -9,6 +9,14 @@ export default function Home() {
   const [step, setStep] = useState<"phone" | "verify" | "done">("phone");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [cooldown, setCooldown] = useState(0);
+
+  // Countdown timer for resend cooldown
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = setTimeout(() => setCooldown(cooldown - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [cooldown]);
 
   const handleSendOTP = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,6 +46,7 @@ export default function Home() {
         return;
       }
 
+      setCooldown(30);
       setStep("verify");
     } catch {
       setError("Failed to send code. Try again.");
@@ -45,6 +54,34 @@ export default function Home() {
       setLoading(false);
     }
   };
+
+  const handleResend = useCallback(async () => {
+    if (cooldown > 0 || loading) return;
+    setLoading(true);
+    setError("");
+
+    try {
+      const res = await fetch("/api/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, channel }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Failed to resend code");
+        return;
+      }
+
+      setCooldown(30);
+      setCode("");
+    } catch {
+      setError("Failed to resend code. Try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, [cooldown, loading, phone, channel]);
 
   const handleVerifyOTP = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -132,10 +169,20 @@ export default function Home() {
             </button>
           </form>
           <button
+            onClick={handleResend}
+            disabled={cooldown > 0 || loading}
+            className="w-full mt-3 text-blue-600 text-sm hover:text-blue-700 disabled:text-gray-400 disabled:cursor-not-allowed"
+          >
+            {cooldown > 0
+              ? `Resend code in ${cooldown}s`
+              : "Resend code"}
+          </button>
+          <button
             onClick={() => {
               setStep("phone");
               setCode("");
               setError("");
+              setCooldown(0);
             }}
             className="w-full mt-2 text-gray-500 text-sm hover:text-gray-700"
           >
