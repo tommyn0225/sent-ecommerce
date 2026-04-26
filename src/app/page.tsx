@@ -5,6 +5,7 @@ import { useState } from "react";
 export default function Home() {
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
+  const [channel, setChannel] = useState<"sms" | "whatsapp">("sms");
   const [step, setStep] = useState<"phone" | "verify" | "done">("phone");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -27,7 +28,7 @@ export default function Home() {
       const res = await fetch("/api/send-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: cleaned }),
+        body: JSON.stringify({ phone: cleaned, channel }),
       });
 
       const data = await res.json();
@@ -107,7 +108,7 @@ export default function Home() {
             Enter verification code
           </h1>
           <p className="text-gray-600 mb-6">
-            We sent a code to <span className="font-medium">{phone}</span>
+            We sent a code via {channel === "whatsapp" ? "WhatsApp" : "SMS"} to <span className="font-medium">{phone}</span>
           </p>
           {error && (
             <p className="text-red-500 text-sm mb-4">{error}</p>
@@ -156,6 +157,33 @@ export default function Home() {
           <p className="text-red-500 text-sm mb-4">{error}</p>
         )}
         <form onSubmit={handleSendOTP}>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Send code via
+          </label>
+          <div className="flex gap-2 mb-4">
+            <button
+              type="button"
+              onClick={() => setChannel("sms")}
+              className={`flex-1 py-2 px-4 rounded-lg border text-sm font-medium transition ${
+                channel === "sms"
+                  ? "border-blue-600 bg-blue-50 text-blue-700"
+                  : "border-gray-300 text-gray-500 hover:border-gray-400"
+              }`}
+            >
+              SMS
+            </button>
+            <button
+              type="button"
+              onClick={() => setChannel("whatsapp")}
+              className={`flex-1 py-2 px-4 rounded-lg border text-sm font-medium transition ${
+                channel === "whatsapp"
+                  ? "border-green-600 bg-green-50 text-green-700"
+                  : "border-gray-300 text-gray-500 hover:border-gray-400"
+              }`}
+            >
+              WhatsApp
+            </button>
+          </div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Phone number
           </label>

@@ -9,7 +9,7 @@ const twilioClient = twilio(
 );
 
 export async function POST(request: Request) {
-  const { phone } = await request.json();
+  const { phone, channel = "sms" } = await request.json();
 
   if (!phone) {
     return NextResponse.json(
@@ -21,12 +21,20 @@ export async function POST(request: Request) {
   const code = Math.floor(100000 + Math.random() * 900000).toString();
 
   try {
-    // Send SMS via Twilio
-    await twilioClient.messages.create({
-      body: `${code} is your verification code.`,
-      from: process.env.TWILIO_PHONE_NUMBER,
-      to: phone,
-    });
+    // Send OTP via the selected channel
+    if (channel === "whatsapp") {
+      await twilioClient.messages.create({
+        body: `${code} is your verification code.`,
+        from: process.env.TWILIO_WHATSAPP_NUMBER,
+        to: `whatsapp:${phone}`,
+      });
+    } else {
+      await twilioClient.messages.create({
+        body: `${code} is your verification code.`,
+        from: process.env.TWILIO_PHONE_NUMBER,
+        to: phone,
+      });
+    }
 
     // Hash the code before storing
     const codeHash = await bcrypt.hash(code, 10);
@@ -34,8 +42,8 @@ export async function POST(request: Request) {
     // Delete any existing codes for this phone number
     await supabase.from("otp_codes").delete().eq("phone", phone);
 
-    // Store the hashed code with a 5-minute expiration
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+    // Store the hashed code with a 1-minute expiration
+    const expiresAt = new Date(Date.now() + 1 * 60 * 1000).toISOString();
 
     const { error: dbError } = await supabase.from("otp_codes").insert({
       phone,
